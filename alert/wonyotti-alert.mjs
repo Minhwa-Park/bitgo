@@ -1,10 +1,11 @@
-// 워뇨띠 스타일 1시간봉 분석 → 롱/숏으로 바뀌면 카카오톡 "나에게 보내기" 알림
+// 워뇨띠 스타일 1시간봉 분석 → 롱/숏으로 바뀌면 휴대폰으로 푸시 알림 (ntfy)
 // GitHub Actions에서 10분마다 실행됩니다. 분석 규칙은 bitgo.html 화면과 같습니다.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_URL = 'https://minhwa-park.github.io/bitgo/bitgo.html';
 const TF = '1h', HIGHER = '4h';
 const NAMES = { LONG: '롱 우위', SHORT: '숏 우위', WAIT: '관망' };
 const usd = (n, d = 0) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -86,39 +87,35 @@ export function analyze(cs, hs) {
   return { score, reasons, vRatio, cat, price: live.c };
 }
 
-/* ---------- 카카오톡 ---------- */
-const FORM = { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' };
-async function kakaoRefresh(env) {
-  const body = new URLSearchParams({ grant_type: 'refresh_token', client_id: env.KAKAO_REST_API_KEY, refresh_token: env.KAKAO_REFRESH_TOKEN });
-  if (env.KAKAO_CLIENT_SECRET) body.set('client_secret', env.KAKAO_CLIENT_SECRET);
-  const r = await fetch('https://kauth.kakao.com/oauth/token', { method: 'POST', headers: FORM, body });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.access_token) throw new Error(`카카오 토큰 갱신 실패 (${r.status}) ${d.error || ''} ${d.error_description || ''}`.trim());
-  return d; // 갱신 토큰이 30일 이내로 남았을 때만 d.refresh_token이 함께 옵니다
+/* ---------- 푸시 알림 (ntfy) ---------- */
+// 주제(topic) 이름은 사실상 비밀번호입니다. 로그나 오류 문구에 절대 찍지 않습니다.
+function checkTopic(env) {
+  const t = (env.NTFY_TOPIC || '').trim();
+  if (!t) throw new Error('NTFY_TOPIC 비밀값이 없습니다');
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(t)) throw new Error('NTFY_TOPIC 형식이 올바르지 않습니다 (영문, 숫자, _, - 만 64자 이내)');
+  return t;
 }
-async function kakaoSend(accessToken, text, env) {
-  const url = env.DASHBOARD_URL || 'https://minhwa-park.github.io/bitgo/bitgo.html';
-  const tpl = { object_type: 'text', text: text.slice(0, 200), link: { web_url: url, mobile_web_url: url }, button_title: '대시보드 열기' };
-  const r = await fetch('https://kapi.kakao.com/v2/api/talk/memo/default/send', {
-    method: 'POST', headers: { ...FORM, Authorization: 'Bearer ' + accessToken },
-    body: new URLSearchParams({ template_object: JSON.stringify(tpl) }),
+async function ntfySend(env, { title, message, priority = 3, tags = [] }) {
+  const topic = checkTopic(env);
+  const server = (env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/+$/, '');
+  const r = await fetch(server + '/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic, title, message, priority, tags, click: env.DASHBOARD_URL || DEFAULT_URL }),
   });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok || d.result_code !== 0) throw new Error(`카카오 전송 실패 (${r.status}) ${d.msg || ''}`.trim());
+  if (!r.ok) throw new Error(`ntfy 전송 실패 (HTTP ${r.status})`);
 }
 
 export function buildMessage(r, prev) {
-  const head = `[워뇨띠 스타일] 1시간봉 ${NAMES[prev] || '-'} → ${NAMES[r.cat]}\n점수 ${r.score > 0 ? '+' : ''}${r.score} · BTC ${usd(r.price)} · 거래량 ${r.vRatio.toFixed(1)}배`;
-  const foot = '※ 단순 규칙 시뮬레이션, 투자 권유 아님';
-  const room = 200 - head.length - foot.length - 2;
-  const why = r.reasons.map(x => `${x.p > 0 ? '+' : ''}${x.p} ${x.t}`).join(' · ').slice(0, Math.max(room, 0));
-  return `${head}\n${why}\n${foot}`;
+  const title = `워뇨띠 스타일 1시간봉: ${NAMES[prev] || '-'} → ${NAMES[r.cat]}`;
+  const why = r.reasons.map(x => `${x.p > 0 ? '+' : ''}${x.p} ${x.t}`).join(' · ');
+  const message = `점수 ${r.score > 0 ? '+' : ''}${r.score} · BTC ${usd(r.price)} · 거래량 ${r.vRatio.toFixed(1)}배\n${why}\n※ 단순 규칙 시뮬레이션, 투자 권유 아님`;
+  return { title, message, priority: 4, tags: [r.cat === 'LONG' ? 'chart_with_upwards_trend' : 'chart_with_downwards_trend'] };
 }
 
 /* ---------- 상태 파일 ---------- */
 const readState = p => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; } };
 const writeState = (p, s) => fs.writeFileSync(p, JSON.stringify(s, null, 2) + '\n');
-const daysBetween = (a, b) => Math.floor((Date.parse(b) - Date.parse(a)) / 86400000);
 
 export async function main(env = process.env) {
   const statePath = env.STATE_PATH || path.join(HERE, 'state.json');
@@ -133,22 +130,19 @@ export async function main(env = process.env) {
   const prev = state.verdict;
   const comparable = prev !== undefined && state.source === source; // 소스가 바뀐 직후엔 알림 생략
   const shouldAlert = comparable && r.cat !== prev && (r.cat === 'LONG' || r.cat === 'SHORT');
-  const tokenDue = state.lastTokenCheck !== today;
 
-  const next = { ...state, verdict: r.cat, source };
-  if (test || shouldAlert || tokenDue) {
-    if (!env.KAKAO_REST_API_KEY || !env.KAKAO_REFRESH_TOKEN) throw new Error('KAKAO_REST_API_KEY / KAKAO_REFRESH_TOKEN 비밀값이 없습니다');
-    const t = await kakaoRefresh(env);
-    next.lastTokenCheck = today;
-    if (test) await kakaoSend(t.access_token, '✅ 알림 테스트: 카카오톡 연결이 정상입니다.\n워뇨띠 스타일 1시간봉이 롱/숏으로 바뀌면 이렇게 알려 드립니다.', env);
-    if (shouldAlert) { await kakaoSend(t.access_token, buildMessage(r, prev), env); console.log('카카오톡 알림 전송 완료'); }
-    if (t.refresh_token && (!state.lastTokenWarn || daysBetween(state.lastTokenWarn, today) >= 3)) {
-      await kakaoSend(t.access_token, '⚠️ 카카오 갱신 토큰 만료가 30일 이내입니다.\n알림이 멈추기 전에 토큰을 다시 발급해 GitHub Secrets의 KAKAO_REFRESH_TOKEN을 바꿔 주세요.', env);
-      next.lastTokenWarn = today;
-    }
+  if (test) {
+    await ntfySend(env, { title: '✅ 알림 테스트', message: 'ntfy 연결이 정상입니다.\n워뇨띠 스타일 1시간봉이 롱/숏으로 바뀌면 이렇게 알려 드립니다.', priority: 3, tags: ['white_check_mark'] });
+    console.log('테스트 알림 전송 완료');
   }
-  writeState(statePath, next); // 전송까지 성공했을 때만 저장 → 실패하면 다음 실행에서 다시 시도
-  return { r, next, shouldAlert };
+  if (shouldAlert) {
+    await ntfySend(env, buildMessage(r, prev));
+    console.log('푸시 알림 전송 완료');
+  }
+  // 전송까지 성공했을 때만 저장 → 실패하면 다음 실행에서 다시 시도합니다.
+  // lastCheck는 하루에 한 번만 바뀌어서, 대시보드가 "봇이 살아 있는지" 확인하는 데 씁니다.
+  writeState(statePath, { verdict: r.cat, source, lastCheck: today });
+  return { r, shouldAlert };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

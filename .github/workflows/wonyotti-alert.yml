@@ -6,7 +6,7 @@ on:
   workflow_dispatch:         # Actions 탭에서 손으로 실행 (테스트 가능)
     inputs:
       test:
-        description: '카카오톡 테스트 메시지 보내기'
+        description: '휴대폰으로 테스트 알림 보내기'
         type: boolean
         default: false
 
@@ -28,11 +28,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: 분석하고 필요하면 카카오톡 보내기
+      - name: 분석하고 필요하면 푸시 알림 보내기
         env:
-          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
-          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
-          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
           DASHBOARD_URL: https://minhwa-park.github.io/bitgo/bitgo.html
           TEST_MODE: ${{ github.event.inputs.test }}
         run: node alert/wonyotti-alert.mjs
