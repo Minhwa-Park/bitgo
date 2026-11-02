@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿@'
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -43,12 +44,26 @@
   .alert b{color:var(--accent)}
   .calm{color:var(--muted);font-size:13px;margin-bottom:14px}
   .note{color:var(--muted);font-size:12px;margin-top:10px;line-height:1.6}
+  .tfbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px;color:var(--muted);font-size:13px}
+  .tfbar button.on{border-color:var(--accent);color:var(--accent)}
+  .wgrid{display:grid;grid-template-columns:minmax(260px,1fr) 2fr;gap:16px}
+  @media(max-width:800px){.wgrid{grid-template-columns:1fr}}
+  .tv{height:440px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .verdict{font-size:22px;font-weight:700;margin-bottom:10px}
+  .scorebar{position:relative;height:8px;background:var(--line);border-radius:4px;margin:6px 0}
+  .scorebar div{position:absolute;top:0;height:100%;border-radius:4px}
+  .scorebar .mid{position:absolute;left:50%;top:-3px;width:2px;height:14px;background:var(--muted)}
+  .reasons{margin:10px 0;padding:0}
+  .reasons li{list-style:none;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px;display:flex;gap:8px;align-items:baseline}
+  .reasons li span:first-child{font-weight:700;min-width:22px}
+  .reasons time{color:var(--muted);font-size:12px;min-width:90px}
+  details.note summary{cursor:pointer;color:var(--text);margin-top:14px}
 </style>
 </head>
 <body>
 <header>
   <h1><span>₿</span> 비트코인 실시간 대시보드</h1>
-  <div class="meta">가격 10초 · 뉴스/온체인 60초 자동갱신 · 마지막 갱신 <b id="updated">-</b>
+  <div class="meta">가격 10초 · 워뇨띠 분석 15초 · 뉴스/온체인 60초 자동갱신 · 마지막 갱신 <b id="updated">-</b>
     &nbsp;<button onclick="refreshAll()">지금 갱신</button></div>
 </header>
 <main>
@@ -63,6 +78,41 @@
     <div class="card" id="upbit"><h3>Upbit <span>BTC/KRW</span></h3><div class="body">로딩 중…</div></div>
     <div class="card" id="coinbase"><h3>Coinbase <span>BTC/USD</span></h3><div class="body">로딩 중…</div></div>
     <div class="card" id="dexbest"><h3>DEX (최대 거래량 풀) <span id="dexpair">-</span></h3><div class="body">로딩 중…</div></div>
+  </section>
+  <section class="card" id="wonyotti">
+    <h2>워뇨띠 스타일 실시간 분석 <span class="meta">(공개 Q&amp;A에 알려진 원칙을 단순 규칙으로 옮긴 참고용 시뮬레이션)</span></h2>
+    <div class="tfbar">분석 봉:
+      <button data-tf="15m" class="on">15분봉</button><button data-tf="1h">1시간봉</button><button data-tf="4h">4시간봉</button>
+      <span class="meta" id="wUpdated"></span></div>
+    <div class="wgrid">
+      <div>
+        <div id="wVerdict" class="verdict">분석 중…</div>
+        <div class="scorebar"><div id="wBar"></div><span class="mid"></span></div>
+        <div class="sub" id="wScoreTxt"></div>
+        <ul id="wReasons" class="reasons"></ul>
+        <div class="row"><span>거래량 신뢰도 (직전 봉 ÷ 20봉 평균)</span><span id="wVol">-</span></div>
+        <div class="row"><span>참고 손절선 (롱 −3% / 숏 +3%)</span><span id="wStop">-</span></div>
+      </div>
+      <div class="tv"><div id="tvchart" style="height:100%"></div></div>
+    </div>
+    <h4>신호 변화 기록 <span class="meta">(이 브라우저에만 저장)</span></h4>
+    <ul id="wLog" class="reasons"><li class="meta">아직 기록이 없습니다.</li></ul>
+    <details class="note"><summary>워뇨띠 매매 원칙 요약과 이 분석의 규칙 보기</summary>
+      <p><b>알려진 원칙</b> (커뮤니티가 정리한 Q&amp;A 기준, 본인 확인 불가)<br>
+      · 캔들과 거래량을 가장 신뢰하고, 보조지표는 참고만. 이평선은 기본 설정으로 추세 확인 때만 봄<br>
+      · 정해진 매매법은 없다고 말함. 스캘핑 위주이며 일봉 시나리오는 짜지 않음<br>
+      · 잘 아는 패턴이 나올 때만 진입, 거래량은 예측의 신뢰도로 사용<br>
+      · 분할 진입·분할 청산, 아는 구간이 끝나면 바로 청산<br>
+      · 손절은 대략 3~5%, 격리 포지션으로 시드 일부만 운용, 이익의 20%는 바로 출금</p>
+      <p><b>이 화면의 점수 규칙</b><br>
+      · 20봉 고점 돌파 +2 / 20봉 저점 이탈 −2 (잘 아는 패턴)<br>
+      · 최근 확정 3봉 연속 양봉 +1 / 음봉 −1<br>
+      · 직전 봉 장대양봉 +1 / 장대음봉 −1, 긴 아랫꼬리 +1 / 긴 윗꼬리 −1<br>
+      · 가격 &gt; 20이평 &gt; 60이평 +1 / 반대 −1<br>
+      · 상위 봉(15분→1시간, 1시간→4시간, 4시간→일봉)이 20이평 위 +1 / 아래 −1<br>
+      · 합계 +3 이상이고 거래량이 평균 이상이면 "롱 우위", −3 이하면 "숏 우위", 그 외는 "관망"</p>
+      <p>워뇨띠 본인의 실제 포지션이나 판단이 아니며, 투자 권유가 아닙니다. 실제 매매에 그대로 쓰지 마세요.</p>
+    </details>
   </section>
   <section class="card" id="onchain">
     <h2>온체인 지표 <span class="meta">(일봉: 바이낸스 UTC 기준 = 한국시간 오전 9시 시작)</span></h2>
@@ -92,6 +142,7 @@
     <ul id="newsList"><li>로딩 중…</li></ul>
   </section>
 </main>
+<script src="https://s3.tradingview.com/tv.js"></script>
 <script>
 const PRICE_MS = 10000, NEWS_MS = 60000, PUMP_PCT = 3;
 const state = { fx: null, binance: null, upbit: null, coinbase: null, dexVol: null, oc: null, seenNews: new Set(), firstNewsLoad: true };
@@ -374,6 +425,119 @@ async function loadOnchain() {
       (ocErr ? ` <span class="err">${esc(ocErr)}</span>` : '');
   }
 }
+/* ---------- 워뇨띠 스타일 분석 ---------- */
+const W_HIGHER = { '15m': '1h', '1h': '4h', '4h': '1d' }, W_NAME = { '15m': '15분봉', '1h': '1시간봉', '4h': '4시간봉' };
+const W_LOG_KEY = 'bitgo_wlog_v1';
+state.wTf = '15m'; state.wLast = null;
+try { state.wLog = JSON.parse(localStorage.getItem(W_LOG_KEY)) || []; } catch { state.wLog = []; }
+
+async function klines(tf, limit) {
+  const q = `?symbol=BTCUSDT&interval=${tf}&limit=${limit}`;
+  const k = await firstOk(['https://api.binance.com/api/v3/klines' + q, 'https://data-api.binance.vision/api/v3/klines' + q]);
+  return k.map(c => ({ t: c[0], o: +c[1], h: +c[2], l: +c[3], c: +c[4], v: +c[5] }));
+}
+const sma = (arr, n) => arr.length < n ? null : arr.slice(-n).reduce((s, x) => s + x, 0) / n;
+
+function analyzeW(cs, hs) {
+  const closed = cs.slice(0, -1), live = cs[cs.length - 1];
+  const last = closed[closed.length - 1], prev20 = closed.slice(-21, -1);
+  const reasons = []; let score = 0;
+  const add = (p, txt) => { score += p; reasons.push({ p, txt }); };
+
+  // 1) 잘 아는 패턴: 20봉 고점 돌파 / 저점 이탈
+  const hi20 = Math.max(...prev20.map(c => c.h)), lo20 = Math.min(...prev20.map(c => c.l));
+  if (last.c > hi20) add(2, `직전 봉이 20봉 고점(${usd(hi20, 0)}) 돌파 마감`);
+  else if (last.c < lo20) add(-2, `직전 봉이 20봉 저점(${usd(lo20, 0)}) 이탈 마감`);
+
+  // 2) 캔들 흐름: 최근 확정 3봉
+  const l3 = closed.slice(-3), ups = l3.filter(c => c.c > c.o).length;
+  if (ups === 3) add(1, '최근 확정 3봉 연속 양봉');
+  else if (ups === 0) add(-1, '최근 확정 3봉 연속 음봉');
+
+  // 3) 직전 봉 모양: 장대봉 / 꼬리
+  const range = last.h - last.l || 1, body = Math.abs(last.c - last.o);
+  const upW = last.h - Math.max(last.c, last.o), loW = Math.min(last.c, last.o) - last.l;
+  if (body / range >= 0.6) add(last.c > last.o ? 1 : -1, last.c > last.o ? '직전 봉 장대양봉' : '직전 봉 장대음봉');
+  if (loW / range >= 0.5 && loW > body * 2) add(1, '긴 아랫꼬리 (저가 매수세)');
+  if (upW / range >= 0.5 && upW > body * 2) add(-1, '긴 윗꼬리 (고가 매도 압력)');
+
+  // 4) 이평선 기본 설정 (20, 60)
+  const closes = closed.map(c => c.c), ma20 = sma(closes, 20), ma60 = sma(closes, 60);
+  if (ma20 && ma60) {
+    if (last.c > ma20 && ma20 > ma60) add(1, `정배열 (가격 > 20이평 ${usd(ma20, 0)} > 60이평)`);
+    else if (last.c < ma20 && ma20 < ma60) add(-1, `역배열 (가격 < 20이평 ${usd(ma20, 0)} < 60이평)`);
+  }
+
+  // 5) 상위 봉 추세
+  const hClosed = hs.slice(0, -1), hMa = sma(hClosed.map(c => c.c), 20), hLast = hs[hs.length - 1].c;
+  if (hMa) add(hLast > hMa ? 1 : -1, `상위 봉 ${hLast > hMa ? '20이평 위 (상승 추세)' : '20이평 아래 (하락 추세)'}`);
+
+  // 거래량 = 예측의 신뢰도
+  const vAvg = sma(prev20.map(c => c.v), 20), vRatio = vAvg ? last.v / vAvg : 1;
+
+  let verdict, cls;
+  if (score >= 3 && vRatio >= 1) { verdict = '롱 우위'; cls = 'up'; }
+  else if (score <= -3 && vRatio >= 1) { verdict = '숏 우위'; cls = 'down'; }
+  else if (Math.abs(score) >= 3) { verdict = (score > 0 ? '롱' : '숏') + ' 쪽이지만 거래량 부족 · 관망'; cls = ''; }
+  else { verdict = '관망 · 아는 자리가 아님'; cls = ''; }
+  return { score, reasons, vRatio, verdict, cls, price: live.c };
+}
+
+async function loadWonyotti() {
+  const tf = state.wTf;
+  try {
+    const [cs, hs] = await Promise.all([klines(tf, 120), klines(W_HIGHER[tf], 60)]);
+    if (tf !== state.wTf) return; // 분석 중 봉 변경됨
+    const r = analyzeW(cs, hs);
+    const v = document.getElementById('wVerdict');
+    v.textContent = `${W_NAME[tf]} 기준: ${r.verdict}`; v.className = 'verdict ' + r.cls;
+    const pctW = Math.max(-6, Math.min(6, r.score)) / 6 * 50;
+    const bar = document.getElementById('wBar');
+    bar.style.left = pctW >= 0 ? '50%' : (50 + pctW) + '%'; bar.style.width = Math.abs(pctW) + '%';
+    bar.style.background = r.score >= 0 ? 'var(--up)' : 'var(--down)';
+    document.getElementById('wScoreTxt').textContent = `점수 ${r.score > 0 ? '+' : ''}${r.score} (−6 숏 ~ +6 롱) · 현재가 ${usd(r.price)}`;
+    document.getElementById('wReasons').innerHTML = r.reasons.length
+      ? r.reasons.map(x => `<li><span class="${x.p > 0 ? 'up' : 'down'}">${x.p > 0 ? '+' : ''}${x.p}</span> ${esc(x.txt)}</li>`).join('')
+      : '<li class="meta">눈에 띄는 패턴이 없습니다.</li>';
+    document.getElementById('wVol').innerHTML =
+      `<span class="${r.vRatio >= 1.5 ? 'up' : r.vRatio < 0.8 ? 'down' : ''}">${r.vRatio.toFixed(2)}배 · ${r.vRatio >= 1.5 ? '높음' : r.vRatio >= 1 ? '보통' : '낮음'}</span>`;
+    document.getElementById('wStop').textContent = `${usd(r.price * 0.97, 0)} / ${usd(r.price * 1.03, 0)}`;
+    document.getElementById('wUpdated').textContent = '· ' + new Date().toLocaleTimeString('ko-KR') + ' 분석';
+
+    const key = tf + '|' + r.verdict;
+    if (state.wLast !== null && state.wLast !== key) {
+      state.wLog.unshift({ t: Date.now(), tf, verdict: r.verdict, cls: r.cls, price: r.price, score: r.score });
+      state.wLog = state.wLog.slice(0, 30);
+      try { localStorage.setItem(W_LOG_KEY, JSON.stringify(state.wLog)); } catch {}
+    }
+    state.wLast = key;
+    renderWLog();
+  } catch (e) {
+    document.getElementById('wVerdict').innerHTML = `<span class="err">차트 데이터 실패: ${esc(e.message)}</span>`;
+  }
+}
+function renderWLog() {
+  document.getElementById('wLog').innerHTML = state.wLog.length ? state.wLog.map(x =>
+    `<li><time>${new Date(x.t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>
+      ${W_NAME[x.tf]} <b class="${x.cls}">${esc(x.verdict)}</b> <span class="meta">점수 ${x.score > 0 ? '+' : ''}${x.score} · ${usd(x.price, 0)}</span></li>`).join('')
+    : '<li class="meta">아직 기록이 없습니다. 신호가 바뀌면 여기에 쌓입니다.</li>';
+}
+function initTvChart(tf) {
+  const iv = { '15m': '15', '1h': '60', '4h': '240' }[tf];
+  const box = document.getElementById('tvchart');
+  if (!window.TradingView) { box.innerHTML = '<div class="meta" style="padding:12px">트레이딩뷰 차트를 불러오지 못했습니다.</div>'; return; }
+  box.innerHTML = '';
+  new TradingView.widget({ autosize: true, symbol: 'BINANCE:BTCUSDT', interval: iv, timezone: 'Asia/Seoul', theme: 'dark',
+    style: '1', locale: 'kr', container_id: 'tvchart', hide_side_toolbar: true, allow_symbol_change: false,
+    studies: ['Volume@tv-basicstudies'] });
+}
+document.querySelectorAll('.tfbar button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tfbar button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); state.wTf = b.dataset.tf; state.wLast = null;
+  document.getElementById('wVerdict').textContent = '분석 중…';
+  initTvChart(state.wTf); loadWonyotti();
+}));
+renderWLog();
 
 /* ---------- 블록미디어 뉴스 ---------- */
 const FEED = 'https://www.blockmedia.co.kr/feed';
@@ -423,7 +587,10 @@ async function refreshPrices() {
   document.getElementById('updated').textContent = new Date().toLocaleTimeString('ko-KR');
 }
 async function refreshAll() { await loadFx(); await Promise.all([refreshPrices().then(loadOnchain), loadNews()]); }
+initTvChart(state.wTf);
 refreshAll();
+loadWonyotti();
+setInterval(loadWonyotti, 15000);
 setInterval(refreshPrices, PRICE_MS);
 setInterval(loadNews, NEWS_MS);
 setInterval(loadOnchain, NEWS_MS);
@@ -431,3 +598,5 @@ setInterval(loadFx, 30 * 60000);
 </script>
 </body>
 </html>
+'@ | Set-Content -Path bitgo.html -Encoding UTF8
+start bitgo.html
