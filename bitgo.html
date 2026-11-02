@@ -66,6 +66,7 @@
   .reasons li span:first-child{font-weight:700;min-width:24px}
   .reasons time{color:var(--muted);font-size:11px;min-width:92px}
   details.note summary{cursor:pointer;color:var(--text);margin-top:16px;letter-spacing:.04em}
+  .botbox{border:1px dotted #444;border-radius:14px;padding:12px 14px;line-height:1.7;margin-bottom:12px;font-size:12px}
 </style>
 </head>
 <body>
@@ -105,6 +106,16 @@
     </div>
     <h4>신호 변화 기록 <span class="meta">(이 브라우저에만 저장)</span></h4>
     <ul id="wLog" class="reasons"><li class="meta">아직 기록이 없습니다.</li></ul>
+    <h4>카카오톡 알림 봇 <span class="meta" id="botMeta"></span></h4>
+    <div id="botBox" class="botbox">확인 중…</div>
+    <details class="note"><summary>알림 설정 방법 (GitHub Actions + 카카오톡)</summary>
+      <p>1. developers.kakao.com에서 앱을 만들고 카카오 로그인을 켠 뒤, Redirect URI에 <b>http://localhost:3000/oauth</b>를 등록하고 동의항목에서 <b>카카오톡 메시지 전송(talk_message)</b>을 설정합니다.<br>
+      2. 인가 코드를 받아 <b>refresh_token</b>을 발급합니다. (VS Code 터미널 명령어는 안내 문서 참고)<br>
+      3. GitHub 저장소 Settings → Secrets and variables → Actions에 <b>KAKAO_REST_API_KEY</b>, <b>KAKAO_REFRESH_TOKEN</b>(Client Secret을 켰다면 <b>KAKAO_CLIENT_SECRET</b>도)을 등록합니다.<br>
+      4. <a href="https://github.com/Minhwa-Park/bitgo/actions" target="_blank" rel="noopener">Actions 탭</a> → wonyotti-alert → Run workflow에서 테스트 메시지를 보내 연결을 확인합니다.<br>
+      5. 이후 10분마다 자동으로 1시간봉을 분석하고, <b>롱 우위 또는 숏 우위로 바뀔 때만</b> 카톡 "나와의 채팅"으로 알립니다. 카카오 토큰은 약 2개월마다 다시 발급해야 하며, 만료가 가까워지면 카톡으로 경고합니다.</p>
+      <p>이 알림은 이 화면을 열어 두지 않아도 GitHub가 대신 실행합니다. 참고용 시뮬레이션이며 투자 권유가 아닙니다.</p>
+    </details>
     <details class="note"><summary>워뇨띠 매매 원칙 요약과 이 분석의 규칙 보기</summary>
       <p><b>알려진 원칙</b> (커뮤니티가 정리한 Q&amp;A 기준, 본인 확인 불가)<br>
       · 캔들과 거래량을 가장 신뢰하고, 보조지표는 참고만. 이평선은 기본 설정으로 추세 확인 때만 봄<br>
@@ -547,6 +558,34 @@ document.querySelectorAll('.tfbar button').forEach(b => b.addEventListener('clic
 }));
 renderWLog();
 
+/* ---------- 카카오톡 알림 봇 상태 (GitHub Actions가 기록한 alert/state.json) ---------- */
+const BOT_NAMES = { LONG: ['롱 우위', 'up'], SHORT: ['숏 우위', 'down'], WAIT: ['관망', ''] };
+async function loadBot() {
+  const box = document.getElementById('botBox'), meta = document.getElementById('botMeta');
+  try {
+    const r = await fetch('alert/state.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const st = await r.json();
+    meta.textContent = '· ' + new Date().toLocaleTimeString('ko-KR') + ' 확인';
+    if (!st.verdict) {
+      box.innerHTML = '봇이 아직 한 번도 실행되지 않았습니다. GitHub의 <a href="https://github.com/Minhwa-Park/bitgo/actions" target="_blank" rel="noopener">Actions 탭</a>에서 wonyotti-alert를 확인하세요.';
+      return;
+    }
+    const [name, cls] = BOT_NAMES[st.verdict] || [st.verdict, ''];
+    const dayAgo = d => d ? Math.floor((Date.now() - Date.parse(d)) / 86400000) : null;
+    let html = `봇이 마지막으로 기록한 <b>1시간봉</b> 판정: <b class="${cls}">${esc(name)}</b> <span class="meta">(시세 출처 ${esc(st.source || '-')})</span>`;
+    const chk = dayAgo(st.lastTokenCheck);
+    if (chk === null) html += '<br><span class="meta">카카오 연결은 아직 점검 전입니다.</span>';
+    else if (chk >= 2) html += `<br><span class="err">봇이 멈춘 것 같습니다. 마지막 점검이 ${chk}일 전입니다. Actions 탭을 확인하세요.</span>`;
+    else html += `<br><span class="meta">봇 정상 · 카카오 연결 마지막 점검 ${esc(st.lastTokenCheck)}</span>`;
+    const warn = dayAgo(st.lastTokenWarn);
+    if (warn !== null && warn <= 3) html += '<br><span class="err">카카오 갱신 토큰 만료가 30일 이내입니다. 토큰을 다시 발급해 KAKAO_REFRESH_TOKEN을 바꿔 주세요.</span>';
+    box.innerHTML = html;
+  } catch (e) {
+    box.innerHTML = '<span class="meta">봇 상태는 GitHub Pages 주소(minhwa-park.github.io/bitgo)에서 열었을 때 표시됩니다. 지금은 파일로 직접 열었거나 alert 파일이 아직 올라가지 않은 상태입니다.</span>';
+  }
+}
+
 /* ---------- 블록미디어 뉴스 ---------- */
 const FEED = 'https://www.blockmedia.co.kr/feed';
 async function fetchNews() {
@@ -599,6 +638,8 @@ initTvChart(state.wTf);
 refreshAll();
 loadWonyotti();
 setInterval(loadWonyotti, 15000);
+loadBot();
+setInterval(loadBot, 300000);
 setInterval(refreshPrices, PRICE_MS);
 setInterval(loadNews, NEWS_MS);
 setInterval(loadOnchain, NEWS_MS);

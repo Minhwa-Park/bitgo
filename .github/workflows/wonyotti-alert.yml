@@ -1,0 +1,49 @@
+name: wonyotti-alert
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # 10분마다 (GitHub 사정으로 몇 분 늦을 수 있음)
+  workflow_dispatch:         # Actions 탭에서 손으로 실행 (테스트 가능)
+    inputs:
+      test:
+        description: '카카오톡 테스트 메시지 보내기'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wonyotti-alert
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 분석하고 필요하면 카카오톡 보내기
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          DASHBOARD_URL: https://minhwa-park.github.io/bitgo/bitgo.html
+          TEST_MODE: ${{ github.event.inputs.test }}
+        run: node alert/wonyotti-alert.mjs
+
+      - name: 상태 저장 (바뀐 경우에만 커밋)
+        if: always()
+        run: |
+          git config user.name "wonyotti-bot"
+          git config user.email "wonyotti-bot@users.noreply.github.com"
+          git add alert/state.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore: update alert state"
+          git pull --rebase
+          git push
